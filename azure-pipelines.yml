@@ -12,4 +12,52 @@ variables:
   tfstateFile: terraformazdevops.tfstate
   anyTfChanges: false
 
+steps:
+  - 
+- task: TerraformInstaller@0
+  inputs:
+    terraformVersion: 'latest'
 
+- task: TerraformTaskV3@3
+  displayName: terraform init
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    backendServiceArm: 'Visual Studio Enterprise Subscription(3bfdcefd-da26-461b-87f7-2cc26378e8be)'
+    backendAzureRmResourceGroupName: 'devops-terraform-rg'
+    backendAzureRmStorageAccountName: 'terraforstatefile'
+    backendAzureRmContainerName: 'terraformstate'
+    backendAzureRmKey: 'devopsterra'
+
+- task: TerraformTaskV3@3
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/skip-step'
+    commandOptions: '-out=tfplan'
+    environmentServiceNameAzureRM: 'Visual Studio Enterprise Subscription(1)(3bfdcefd-da26
+    
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Write-Host "LASTEXITCODE : $LASTEXITCODE"
+            $plan = $(terraform show -json tfplan | ConvertFrom-Json)
+            $actions = $plan.resource_changes.change.actions
+            Write-Host "Terraform actions : $actions"
+            if (($actions -contains 'create') -or ($actions -contains 'delete') -or ($actions -contains 'update'))
+            {
+              Write-Host "Terraform will perform the following actions : $actions"
+              Write-Host "##vso[task.setvariable variable=anyTfChanges;]true"
+            }
+            else
+            {
+              Write-Host "There is no change detected in Terraform tfplan file"
+            }
+
+- task: TerraformTaskV3@3
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    commandOptions: 'tfplan'
+    environmentServiceNameAzureRM: 'Visual Studio Enterprise Subscription(1)(3bfdcefd-da26-461b-87f7-2cc26378e8be)'
